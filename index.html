@@ -266,8 +266,8 @@
         </div>
       </div>
       <div class="row" style="margin-top:12px;gap:8px">
-        <button class="btn primary" id="saveEditBtn">Save changes</button>
-        <button class="btn danger" id="deleteEditBtn">Delete</button>
+        <button class="btn primary" id="saveEditBtn" type="button">Save changes</button>
+        <button class="btn danger" id="deleteEditBtn" type="button">Delete</button>
         <button class="btn" value="cancel">Close</button>
       </div>
     </form>
@@ -569,6 +569,18 @@
     document.getElementById('saveTTImg').addEventListener('click', (e)=>{ e.preventDefault(); ttImg.opacity = parseFloat(document.getElementById('ttImgOpacity').value); ttImg.scale   = parseInt(document.getElementById('ttImgScale').value,10); ttImg.pos     = document.getElementById('ttImgPos').value; save(); render(); document.getElementById('imgDlg').close(); });
     document.getElementById('clearTTImg').addEventListener('click', (e)=>{ e.preventDefault(); ttImg.src=''; save(); render(); });
     document.getElementById('ttImgFile').addEventListener('change', async (e)=>{ const f=e.target.files[0]; if(!f) return; ttImg.src = await readAsDataURL(f); save(); render(); });
+
+
+    // Edit dialog — prevent auto-submit and wire buttons
+    const editForm = document.querySelector('#editDlg form');
+    if (editForm) editForm.addEventListener('submit', (e) => e.preventDefault());
+    document.getElementById('saveEditBtn').addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation(); saveEdit();
+    });
+    document.getElementById('deleteEditBtn').addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      if (confirm('Delete this item?')) deleteEdit();
+    });
 
     renderTypesUI();
     renderBrand();
