@@ -70,6 +70,12 @@
     .ampm input{display:none}
     .ampm label{padding:6px 8px;cursor:pointer;background:#fff}
     .ampm input:checked + label{background:#111;color:#fff}
+      /* summary table */
+    .summary-table{width:100%; border-collapse:collapse}
+    .summary-table th, .summary-table td{ padding:8px 10px; border-bottom:1px solid var(--line); font-size:14px; text-align:left }
+    .summary-table thead th{ font-weight:700 }
+    .summary-total td{ font-weight:800 }
+    .sum-chip{ display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:6px; vertical-align:middle }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
@@ -83,9 +89,10 @@
           <input id="scheduleName" type="text" placeholder="e.g., BSN 4B – Semester 1" style="min-width:320px" />
         </label>
         <button class="btn" id="addItemOpen">Add item</button>
+        <button class="btn" id="summaryBtn">See summary</button>
         <button class="btn" id="manageTypesBtn">Manage types/colors</button>
-        <button class="btn" id="brandBtn">Brand header</button>
-        <button class="btn" id="ttImageBtn">Timetable image</button>
+        <button class="btn" id="brandBtn">College Header</button>
+        <button class="btn" id="ttImageBtn">Timetable bg image</button>
         <button class="btn primary" id="exportBtn">Export PNG</button>
         <button class="btn ghost" id="clearBtn" title="Clear all events">Clear</button>
       </div>
@@ -97,8 +104,8 @@
       <div class="brand" id="brandBar">
         <div class="logo"><img id="brandLogo" alt=""/></div>
         <div class="txt">
-          <div class="name" id="brandName">Your Organization</div>
-          <div class="sub" id="brandSub">Program • Term • Section</div>
+          <div class="name" id="brandName">College of Health and Allied Sciences</div>
+          <div class="sub" id="brandSub">Semester</div>
         </div>
       </div>
       <div class="titlebar">
@@ -115,9 +122,9 @@
     <form method="dialog" style="padding:16px 18px;min-width:560px">
       <div class="hd">Add item</div>
       <div class="row" style="gap:10px;flex-wrap:wrap">
-        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Label</span><input id="fLabel" type="text" placeholder="e.g., MICROPARA" style="width:220px"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Label</span><input id="fLabel" type="text" placeholder="e.g., MicroPara" style="width:220px"/></label>
         <label class="row" style="gap:6px"><span class="muted" style="width:90px">Section</span><input id="fSection" type="text" placeholder="e.g., 1BSN-A" style="width:120px"/></label>
-        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Room</span><input id="fRoom" type="text" placeholder="e.g., ANA1" style="width:160px"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Room</span><input id="fRoom" type="text" placeholder="e.g., MICRO1" style="width:160px"/></label>
       </div>
       <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:6px">
         <label class="row" style="gap:6px"><span class="muted" style="width:90px">Type</span><select id="fType" style="min-width:220px"></select></label>
@@ -153,7 +160,7 @@
       <div class="hd">Brand header</div>
       <div class="row" style="gap:10px;flex-wrap:wrap">
         <label class="row" style="gap:6px"><span class="muted" style="width:120px">Brand name</span><input id="bName" type="text" placeholder="e.g., College of Health and Allied Sciences" style="width:320px"/></label>
-        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Subtitle</span><input id="bSub" type="text" placeholder="e.g., AY 2025–2026 • BSN 4B" style="width:320px"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Subtitle</span><input id="bSub" type="text" placeholder="e.g., AY 2025–2026 • 1BSN-A" style="width:320px"/></label>
       </div>
       <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:8px">
         <label class="row" style="gap:6px"><span class="muted" style="width:120px">Header bg</span><input id="bBg" type="color" value="#0f172a"/></label>
@@ -191,6 +198,17 @@
       </div>
       <div class="row" style="margin-top:12px;gap:8px">
         <button class="btn primary" id="saveTTImg">Save</button>
+        <button class="btn" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Summary dialog -->
+  <dialog id="summaryDlg">
+    <form method="dialog" style="padding:16px 18px;min-width:520px">
+      <div class="hd">Summary by load type</div>
+      <div id="summaryBody"></div>
+      <div class="row" style="margin-top:12px;gap:8px">
         <button class="btn" value="cancel">Close</button>
       </div>
     </form>
@@ -263,13 +281,7 @@
   const defaultTypes = [
     {id: uid(), name: 'Lecture', color: '#d9ead3'},
     {id: uid(), name: 'Lab',     color: '#dbe5f1'},
-    {id: uid(), name: 'Clinic',  color: '#fde9d9'},
-    {id: uid(), name: 'Regular Load',  color: '#42872F'},
-    {id: uid(), name: 'Overload',  color: '#FF1C1C'},
-    {id: uid(), name: 'Administrative',  color: '#2F6B87'},
-    {id: uid(), name: 'Research',  color: '#EDB21C'},
-    {id: uid(), name: 'Consultation',  color: '#707070'},
-    {id: uid(), name: 'Quasi',  color: '#ED921C'},
+    {id: uid(), name: 'Clinic',  color: '#fde9d9'}
   ];
   let brand = {name:'Your Organization', sub:'Program • Term • Section', bg:'#0f172a', ink:'#ffffff', subInk:'#cbd5e1', logo:''};
   let ttImg = {src:'', opacity:0.22, scale:40, pos:'bottom-right'};
@@ -471,6 +483,41 @@
 
   function deleteEdit(){ const id = document.getElementById('editId').value; events = events.filter(e=>e.id!==id); document.getElementById('editDlg').close(); save(); render(); }
 
+  // ---------- summary ----------
+  function summarizeByType(){
+    const map = new Map();
+    for (const ev of events){
+      const mins = Math.max(0, (ev.endMin||0) - (ev.startMin||0));
+      if (!map.has(ev.type)) map.set(ev.type, 0);
+      map.set(ev.type, map.get(ev.type) + mins);
+    }
+    const rows = [];
+    for (const [typeId, minutes] of map.entries()){
+      const t = types.find(x=>x.id===typeId) || {name:'Unknown', color:'#ddd'};
+      rows.push({ id:typeId, name:t.name, color:t.color, minutes, hours: minutes/60 });
+    }
+    rows.sort((a,b)=> b.minutes - a.minutes);
+    return rows;
+  }
+  function openSummary(){
+    const box = document.getElementById('summaryBody');
+    const rows = summarizeByType();
+    if (!rows.length){ box.innerHTML = '<div class="muted">No items yet.</div>'; document.getElementById('summaryDlg').showModal(); return; }
+    const totalMin = rows.reduce((s,r)=> s + r.minutes, 0);
+    const html = `
+      <table class="summary-table">
+        <thead><tr><th>Type</th><th>Hours</th><th>HH:MM</th></tr></thead>
+        <tbody>
+          ${rows.map(r=>`<tr><td><span class="sum-chip" style="background:${r.color}"></span>${r.name}</td><td>${(r.hours).toFixed(2)}</td><td>${Math.floor(r.minutes/60)}:${String(r.minutes%60).padStart(2,'0')}</td></tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr class="summary-total"><td>Total</td><td>${(totalMin/60).toFixed(2)}</td><td>${Math.floor(totalMin/60)}:${String(totalMin%60).padStart(2,'0')}</td></tr>
+        </tfoot>
+      </table>`;
+    box.innerHTML = html;
+    document.getElementById('summaryDlg').showModal();
+  }
+
   // ---------- export (keeps table background) ----------
   async function exportPNG(){
     const node = document.getElementById('exportArea');
@@ -492,6 +539,7 @@
     load();
     // wire top bar
     document.getElementById('addItemOpen').addEventListener('click', openAdd);
+    document.getElementById('summaryBtn').addEventListener('click', openSummary);
     document.getElementById('manageTypesBtn').addEventListener('click', ()=>{ renderTypesDialog(); document.getElementById('typesDlg').showModal(); });
     document.getElementById('brandBtn').addEventListener('click', ()=>{ document.getElementById('bName').value = brand.name||''; document.getElementById('bSub').value  = brand.sub||''; document.getElementById('bBg').value   = brand.bg||'#0f172a'; document.getElementById('bInk').value  = brand.ink||'#ffffff'; document.getElementById('bSubInk').value = brand.subInk||'#cbd5e1'; document.getElementById('brandDlg').showModal(); });
     document.getElementById('ttImageBtn').addEventListener('click', ()=>{ document.getElementById('ttImgOpacity').value = ttImg.opacity; document.getElementById('ttImgScale').value = ttImg.scale; document.getElementById('ttImgPos').value = ttImg.pos; document.getElementById('imgDlg').showModal(); });
