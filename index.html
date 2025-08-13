@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paulomon's TimeTabler</title>
+  <style>
+    :root{
+      /* Tweak these in CSS (no theme UI) */
+      --bg:#f7f7fb; --ink:#222; --muted:#666; --line:#ddd; --accent:#3b82f6; --card:#fff;
+      --timecol:#fafafa;
+      --col-gap:10px; --day-col-width:170px; --time-col-width:84px;
+      --px-per-min:1.2; /* vertical scale */
+      --event-radius:12px;
+      --brand-bg:#0f172a; --brand-ink:#ffffff; --brand-sub:#cbd5e1;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    header{position:sticky;top:0;z-index:5;background:linear-gradient(var(--card),var(--card) 70%,rgba(255,255,255,.85));border-bottom:1px solid var(--line)}
+    .wrap{max-width:1200px;margin:0 auto;padding:12px 16px}
+    h1{margin:0 0 6px;font-size:18px}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    input[type=text], input[type=number], select{height:36px;padding:6px 10px;border:1px solid #ccc;border-radius:10px;background:#fff}
+    input[type=color]{height:36px;padding:0 4px;border:1px solid #ccc;border-radius:8px;background:#fff}
+    .btn{height:36px;padding:0 12px;border:1px solid #3b3b3b22;border-radius:10px;background:#fff;cursor:pointer;color:var(--ink)}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .btn.ghost{background:transparent}
+    .btn.danger{background:#ef4444;border-color:#ef4444;color:#fff}
+
+    /* Single-column layout; form is now a modal */
+    main{max-width:1200px;margin:16px auto;padding:0 16px}
+
+    /* Export area (keep table background) */
+    #exportArea{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+
+    .brand{display:flex;align-items:center;gap:14px;padding:16px;border-bottom:1px solid var(--line);background:var(--brand-bg);color:var(--brand-ink)}
+    .brand .logo{width:56px;height:56px;border-radius:12px;background:#ffffff22;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .brand .logo img{width:100%;height:100%;object-fit:cover}
+    .brand .txt .name{font-size:20px;font-weight:800;line-height:1}
+    .brand .txt .sub{font-size:12px;color:var(--brand-sub)}
+
+    .titlebar{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+    .titlebar h2{margin:0;font-size:20px}
+    .legend{display:flex;gap:10px;flex-wrap:wrap}
+    .legend .typechip{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#fff}
+    .legend .typechip .sw{width:14px;height:14px;border-radius:50%}
+
+    .timetable{position:relative;display:grid;grid-template-columns:var(--time-col-width) repeat(7, var(--day-col-width)); gap:var(--col-gap); padding:12px}
+    .timecol{background:var(--timecol);border-right:1px dashed var(--line);padding-top:40px}
+    .timeLabel{height:calc(30 * var(--px-per-min) * 1px);display:flex;align-items:flex-start;justify-content:flex-end;padding:2px 6px;color:#777;font-size:12px}
+    .daycol{position:relative;background:#fff;border-left:1px solid var(--line)}
+    .dayname{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:8px 10px;font-weight:600;z-index:2}
+    .hline{position:absolute;left:0;right:0;height:1px;background:var(--line)}
+    .event{position:absolute;padding:8px 10px;border-radius:var(--event-radius);box-shadow:0 2px 4px rgba(0,0,0,.07);overflow:hidden;border:1px solid rgba(0,0,0,.08);cursor:pointer}
+    .event .ev-title{font-weight:800;font-size:13px;margin:0 0 4px}
+    .event .ev-sub{font-size:12px;opacity:.9}
+
+    .tt-image{position:absolute;pointer-events:none;opacity:0.22;max-width:40%;max-height:40%;object-fit:contain;z-index:1}
+
+    dialog{border:none;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.25);background:#fff;color:#111}
+    dialog .hd{font-weight:700;margin-bottom:8px}
+    dialog .row{margin:8px 0}
+
+    /* form bits */
+    .mt-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px}
+    .daychip{display:flex;align-items:center;justify-content:center;height:32px;border:1px solid #d0d0d0;border-radius:10px;background:#fff;cursor:pointer;user-select:none}
+    .daychip[data-on="1"]{background:#ecf2ff;border-color:#c9ddff;color:#1242b9}
+    .times{display:flex;gap:8px;align-items:center;margin:8px 0}
+    .ampm{display:flex;border:1px solid #d0d0d0;border-radius:8px;overflow:hidden}
+    .ampm input{display:none}
+    .ampm label{padding:6px 8px;cursor:pointer;background:#fff}
+    .ampm input:checked + label{background:#111;color:#fff}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="row">
+        <h1>Paulomon's TimeTabler</h1>
+        <label class="row" style="gap:8px">
+          <span class="muted">Schedule name</span>
+          <input id="scheduleName" type="text" placeholder="e.g., BSN 4B – Semester 1" style="min-width:320px" />
+        </label>
+        <button class="btn" id="addItemOpen">Add item</button>
+        <button class="btn" id="manageTypesBtn">Manage types/colors</button>
+        <button class="btn" id="brandBtn">Brand header</button>
+        <button class="btn" id="ttImageBtn">Timetable image</button>
+        <button class="btn primary" id="exportBtn">Export PNG</button>
+        <button class="btn ghost" id="clearBtn" title="Clear all events">Clear</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="exportArea">
+      <div class="brand" id="brandBar">
+        <div class="logo"><img id="brandLogo" alt=""/></div>
+        <div class="txt">
+          <div class="name" id="brandName">Your Organization</div>
+          <div class="sub" id="brandSub">Program • Term • Section</div>
+        </div>
+      </div>
+      <div class="titlebar">
+        <h2 id="titleOut">Untitled schedule</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+      <img id="ttImage" class="tt-image" style="display:none"/>
+      <div class="timetable" id="timetable"></div>
+    </section>
+  </main>
+
+  <!-- Add Item (modal) -->
+  <dialog id="addDlg">
+    <form method="dialog" style="padding:16px 18px;min-width:560px">
+      <div class="hd">Add item</div>
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Label</span><input id="fLabel" type="text" placeholder="e.g., Surgery" style="width:220px"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Section</span><input id="fSection" type="text" placeholder="e.g., 4A" style="width:120px"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Room</span><input id="fRoom" type="text" placeholder="e.g., OR 3 / 204" style="width:160px"/></label>
+      </div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:6px">
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Type</span><select id="fType" style="min-width:220px"></select></label>
+        <button class="btn" id="quickType" type="button">New type</button>
+      </div>
+      <div style="margin-top:12px"><span class="muted">Meeting times</span></div>
+      <div id="timesContainer"></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="addTimeRow" type="button">Add another meeting time</button></div>
+      <div class="row" style="margin-top:12px;gap:8px">
+        <button class="btn primary" id="addItemBtn">Add to timetable</button>
+        <button class="btn" value="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Manage types -->
+  <dialog id="typesDlg">
+    <form method="dialog" style="padding:16px 18px;min-width:520px">
+      <div class="hd">Types & colors</div>
+      <div id="typesList"></div>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <input type="text" id="newTypeName" placeholder="Type name (e.g., Lecture)" style="flex:1" />
+        <input type="color" id="newTypeColor" value="#d9ead3"/>
+        <button class="btn" id="addTypeBtn">Add</button>
+        <button class="btn" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Brand dialog -->
+  <dialog id="brandDlg">
+    <form method="dialog" style="padding:16px 18px;min-width:540px">
+      <div class="hd">Brand header</div>
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Brand name</span><input id="bName" type="text" placeholder="e.g., PGH College of Nursing" style="width:320px"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Subtitle</span><input id="bSub" type="text" placeholder="e.g., AY 2025–2026 • BSN 4B" style="width:320px"/></label>
+      </div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:8px">
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Header bg</span><input id="bBg" type="color" value="#0f172a"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Header text</span><input id="bInk" type="color" value="#ffffff"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Subtitle text</span><input id="bSubInk" type="color" value="#cbd5e1"/></label>
+      </div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:8px">
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Logo image</span><input id="bLogo" type="file" accept="image/*"/></label>
+        <button class="btn danger" id="clearLogo">Remove logo</button>
+      </div>
+      <div class="row" style="margin-top:12px;gap:8px">
+        <button class="btn primary" id="saveBrand">Save</button>
+        <button class="btn" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Timetable image dialog -->
+  <dialog id="imgDlg">
+    <form method="dialog" style="padding:16px 18px;min-width:540px">
+      <div class="hd">Timetable image</div>
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Image</span><input id="ttImgFile" type="file" accept="image/*"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Opacity</span><input id="ttImgOpacity" type="range" min="0" max="1" step="0.01" value="0.22"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Scale (%)</span><input id="ttImgScale" type="number" min="10" max="100" value="40"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:120px">Position</span>
+          <select id="ttImgPos">
+            <option value="top-left">Top‑left</option>
+            <option value="top-right">Top‑right</option>
+            <option value="bottom-left">Bottom‑left</option>
+            <option value="bottom-right" selected>Bottom‑right</option>
+          </select>
+        </label>
+        <button class="btn danger" id="clearTTImg">Remove image</button>
+      </div>
+      <div class="row" style="margin-top:12px;gap:8px">
+        <button class="btn primary" id="saveTTImg">Save</button>
+        <button class="btn" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Edit event dialog -->
+  <dialog id="editDlg">
+    <form method="dialog" style="padding:16px 18px;min-width:520px">
+      <div class="hd">Edit item</div>
+      <input type="hidden" id="editId" />
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Label</span><input id="eLabel" type="text" style="width:210px"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Section</span><input id="eSection" type="text" style="width:120px"/></label>
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Room</span><input id="eRoom" type="text" style="width:160px"/></label>
+      </div>
+      <div class="row" style="gap:10px;margin-top:8px">
+        <label class="row" style="gap:6px"><span class="muted" style="width:90px">Type</span><select id="eType" style="min-width:220px"></select></label>
+      </div>
+      <div class="row" style="gap:10px;margin-top:8px;align-items:flex-end">
+        <div>
+          <div class="muted">Day</div>
+          <select id="eDay">
+            <option value="0">Mon</option>
+            <option value="1">Tue</option>
+            <option value="2">Wed</option>
+            <option value="3">Thu</option>
+            <option value="4">Fri</option>
+            <option value="5">Sat</option>
+            <option value="6">Sun</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted">Start</div>
+          <div class="times">
+            <input id="eSH" type="number" min="1" max="12" value="8" style="width:64px" />
+            <span>:</span>
+            <input id="eSM" type="number" min="0" max="59" value="00" style="width:64px" />
+            <div class="ampm">
+              <input type="radio" id="eSAM" name="eSAMPM" value="AM" checked><label for="eSAM">AM</label>
+              <input type="radio" id="eSPM" name="eSAMPM" value="PM"><label for="eSPM">PM</label>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="muted">End</div>
+          <div class="times">
+            <input id="eEH" type="number" min="1" max="12" value="10" style="width:64px" />
+            <span>:</span>
+            <input id="eEM" type="number" min="0" max="59" value="00" style="width:64px" />
+            <div class="ampm">
+              <input type="radio" id="eEAM" name="eEAMPM" value="AM" checked><label for="eEAM">AM</label>
+              <input type="radio" id="eEPM" name="eEAMPM" value="PM"><label for="eEPM">PM</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;gap:8px">
+        <button class="btn primary" id="saveEditBtn">Save changes</button>
+        <button class="btn danger" id="deleteEditBtn">Delete</button>
+        <button class="btn" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+  // ---------- state ----------
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let events = []; // {id, label, section, room, type, day (0-6), startMin, endMin}
+  let types = [];  // {id, name, color}
+  const defaultTypes = [
+    {id: uid(), name: 'Lecture', color: '#d9ead3'},
+    {id: uid(), name: 'Lab',     color: '#dbe5f1'},
+    {id: uid(), name: 'Clinic',  color: '#fde9d9'}
+  ];
+  let brand = {name:'Your Organization', sub:'Program • Term • Section', bg:'#0f172a', ink:'#ffffff', subInk:'#cbd5e1', logo:''};
+  let ttImg = {src:'', opacity:0.22, scale:40, pos:'bottom-right'};
+
+  // ---------- utils ----------
+  function uid(){return Math.random().toString(36).slice(2,9)}
+  function clamp(n,a,b){return Math.max(a,Math.min(b,n))}
+  function mm(n){return String(n).padStart(2,'0')}
+  function toMinutes12(h, m, ampm){ h = parseInt(h||0,10); m = parseInt(m||0,10); h = clamp(h,1,12); m = clamp(m,0,59); let hh = h % 12; if (ampm==='PM') hh += 12; return hh*60 + m; }
+  function minutesLabel(min){ const h = Math.floor(min/60), m = min%60; const am = h<12; const hr12 = ((h+11)%12)+1; return `${hr12}:${mm(m)} ${am?'AM':'PM'}`; }
+  function textColorFor(bg){ const hex = bg.replace('#',''); if(hex.length<6) return '#111'; const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16); const L = (0.2126*r + 0.7152*g + 0.0722*b)/255; return L>0.6? '#111':'#fff'; }
+  function readAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
+  function save(){ localStorage.setItem('tt_types', JSON.stringify(types)); localStorage.setItem('tt_events', JSON.stringify(events)); localStorage.setItem('tt_name', document.getElementById('scheduleName').value||''); localStorage.setItem('tt_brand', JSON.stringify(brand)); localStorage.setItem('tt_img', JSON.stringify(ttImg)); }
+  function load(){ try{ types = JSON.parse(localStorage.getItem('tt_types'))||defaultTypes; }catch{ types = defaultTypes } try{ events = JSON.parse(localStorage.getItem('tt_events'))||[] }catch{ events=[] } const nm = localStorage.getItem('tt_name')||''; if(nm) document.getElementById('scheduleName').value = nm; try{ brand = {...brand, ...(JSON.parse(localStorage.getItem('tt_brand'))||{})}; }catch{} try{ ttImg = {...ttImg, ...(JSON.parse(localStorage.getItem('tt_img'))||{})}; }catch{} }
+
+  // ---------- dynamic time rows ----------
+  function newTimeRow(){
+    const id = uid(); const id2 = uid();
+    const row = document.createElement('div');
+    row.className = 'card'; row.style.marginTop = '8px';
+    row.innerHTML = `
+      <div class="bd">
+        <div class="mt-row">${days.map((d,i)=>`<div class=\"daychip\" data-day=\"${i}\" data-on=\"0\">${d}</div>`).join('')}</div>
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+          <div>
+            <div class="muted">Start</div>
+            <div class="times">
+              <input class="sh" type="number" min="1" max="12" value="8" style="width:64px" />
+              <span>:</span>
+              <input class="sm" type="number" min="0" max="59" value="00" style="width:64px" />
+              <div class="ampm">
+                <input type="radio" id="sam-${id}" name="sam-${id}" value="AM" checked><label for="sam-${id}">AM</label>
+                <input type="radio" id="spm-${id}" name="sam-${id}" value="PM"><label for="spm-${id}">PM</label>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="muted">End</div>
+            <div class="times">
+              <input class="eh" type="number" min="1" max="12" value="10" style="width:64px" />
+              <span>:</span>
+              <input class="em" type="number" min="0" max="59" value="00" style="width:64px" />
+              <div class="ampm">
+                <input type="radio" id="eam-${id2}" name="eam-${id2}" value="AM" checked><label for="eam-${id2}">AM</label>
+                <input type="radio" id="epm-${id2}" name="eam-${id2}" value="PM"><label for="epm-${id2}">PM</label>
+              </div>
+            </div>
+          </div>
+          <button class="btn danger removeRow" type="button">Remove</button>
+        </div>
+      </div>`;
+    row.querySelectorAll('.daychip').forEach(ch => ch.addEventListener('click', ()=>{ ch.dataset.on = ch.dataset.on === '1' ? '0':'1'; }));
+    row.querySelector('.removeRow').addEventListener('click', ()=> row.remove());
+    return row;
+  }
+
+  function collectTimeRows(){
+    const rows = [...document.querySelectorAll('#timesContainer .card')];
+    const out = [];
+    for (const r of rows){
+      const daysOn = [...r.querySelectorAll('.daychip')].filter(c=>c.dataset.on==='1').map(c=>+c.dataset.day);
+      if (!daysOn.length) continue;
+      const sh = r.querySelector('.sh').value; const sm = r.querySelector('.sm').value;
+      const eh = r.querySelector('.eh').value; const em = r.querySelector('.em').value;
+      const startAMPM = r.querySelectorAll('.ampm')[0].querySelector('input:checked').value;
+      const endAMPM   = r.querySelectorAll('.ampm')[1].querySelector('input:checked').value;
+      const sMin = toMinutes12(sh,sm,startAMPM); const eMin = toMinutes12(eh,em,endAMPM);
+      if (eMin <= sMin) continue;
+      out.push({days:daysOn,startMin:sMin,endMin:eMin});
+    }
+    return out;
+  }
+
+  // ---------- renderers ----------
+  function renderBrand(){
+    const brandBar = document.getElementById('brandBar');
+    brandBar.style.setProperty('--brand-bg', brand.bg||'#0f172a');
+    brandBar.style.setProperty('--brand-ink', brand.ink||'#ffffff');
+    brandBar.style.setProperty('--brand-sub', brand.subInk||'#cbd5e1');
+    document.getElementById('brandName').textContent = brand.name || 'Your Organization';
+    document.getElementById('brandSub').textContent  = brand.sub || '';
+    const logoEl = document.getElementById('brandLogo');
+    if (brand.logo){ logoEl.src = brand.logo; logoEl.style.display = 'block'; } else { logoEl.removeAttribute('src'); logoEl.style.display = 'none'; }
+  }
+
+  function renderTypesUI(){
+    const sel = document.getElementById('fType'); const selE = document.getElementById('eType'); const legend = document.getElementById('legend');
+    sel.innerHTML = ''; selE.innerHTML=''; legend.innerHTML='';
+    for (const t of types){
+      const opt = document.createElement('option'); opt.value = t.id; opt.textContent = t.name; sel.appendChild(opt);
+      const opt2 = document.createElement('option'); opt2.value = t.id; opt2.textContent = t.name; selE.appendChild(opt2);
+      const chip = document.createElement('div'); chip.className='typechip'; chip.innerHTML=`<span class="sw" style="background:${t.color}"></span>${t.name}`; legend.appendChild(chip);
+    }
+  }
+
+  function renderTypesDialog(){
+    const list = document.getElementById('typesList');
+    list.innerHTML = types.map(t=>`
+      <div class="row" style="gap:8px;margin:6px 0">
+        <input data-id="${t.id}" class="tName" type="text" value="${t.name}" style="flex:1"/>
+        <input data-id="${t.id}" class="tColor" type="color" value="${t.color}"/>
+        <button class="btn danger tDel" data-id="${t.id}" type="button">Delete</button>
+      </div>`).join('');
+    list.querySelectorAll('.tName').forEach(inp=>inp.addEventListener('input', e=>{ const t=types.find(x=>x.id===inp.dataset.id); t.name=e.target.value; renderTypesUI(); save(); }));
+    list.querySelectorAll('.tColor').forEach(inp=>inp.addEventListener('input', e=>{ const t=types.find(x=>x.id===inp.dataset.id); t.color=e.target.value; renderTypesUI(); save(); }));
+    list.querySelectorAll('.tDel').forEach(btn=>btn.addEventListener('click', ()=>{ types = types.filter(x=>x.id!==btn.dataset.id); events = events.filter(e=>e.type!==btn.dataset.id); renderTypesDialog(); renderTypesUI(); render(); save(); }));
+  }
+
+  function computeBounds(){
+    if (!events.length) return {start:7*60,end:20*60};
+    let s = Infinity, e = -Infinity; for (const ev of events){ s = Math.min(s, ev.startMin); e = Math.max(e, ev.endMin); }
+    s = Math.floor(s/60)*60; e = Math.ceil(e/60)*60; if (e-s < 8*60) e = s + 8*60; return {start:s, end:e};
+  }
+
+  function laneLayout(dayEvents){
+    const items = [...dayEvents].sort((a,b)=> a.startMin-b.startMin || a.endMin-b.endMin); const laneEnds = [];
+    return items.map(ev=>{ let lane = laneEnds.findIndex(end=> end <= ev.startMin); if (lane===-1){ lane = laneEnds.length; laneEnds.push(ev.endMin); } else { laneEnds[lane] = ev.endMin; } return {ev, lane, lanes: laneEnds.length}; });
+  }
+
+  function render(){
+    const title = document.getElementById('scheduleName').value.trim() || 'Untitled schedule';
+    document.getElementById('titleOut').textContent = title;
+
+    const {start, end} = computeBounds();
+    const table = document.getElementById('timetable'); table.innerHTML = '';
+
+    // time column
+    const timeCol = document.createElement('div'); timeCol.className='timecol';
+    for (let t=start; t<=end; t += 30){ const div = document.createElement('div'); div.className='timeLabel'; div.textContent = minutesLabel(t); timeCol.appendChild(div); }
+    table.appendChild(timeCol);
+
+    // timetable overlay image
+    const img = document.getElementById('ttImage');
+    if (ttImg.src){ img.src = ttImg.src; img.style.display='block'; img.style.opacity = String(ttImg.opacity); img.style.maxWidth = ttImg.scale + '%'; img.style.maxHeight = ttImg.scale + '%'; const pad = 18; const pos = ttImg.pos; img.style.top = ''; img.style.left=''; img.style.right=''; img.style.bottom=''; if (pos==='top-left'){ img.style.top=pad+'px'; img.style.left=pad+'px'; } if (pos==='top-right'){ img.style.top=pad+'px'; img.style.right=pad+'px'; } if (pos==='bottom-left'){ img.style.bottom=pad+'px'; img.style.left=pad+'px'; } if (pos==='bottom-right'){ img.style.bottom=pad+'px'; img.style.right=pad+'px'; } } else { img.style.display='none'; }
+
+    // day columns
+    for (let d=0; d<7; d++){
+      const dc = document.createElement('div'); dc.className='daycol'; dc.dataset.day=d;
+      const dn = document.createElement('div'); dn.className='dayname'; dn.textContent=days[d]; dc.appendChild(dn);
+      const h = (end-start) * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--px-per-min')); dc.style.height = (h + 60) + 'px';
+      for (let t=start; t<=end; t+=30){ const y = (t-start) * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--px-per-min')) + 40; const line = document.createElement('div'); line.className='hline'; line.style.top = y+'px'; dc.appendChild(line); }
+      const dayEvents = events.filter(ev=>ev.day===d); const laid = laneLayout(dayEvents);
+      for (const {ev, lane, lanes} of laid){
+        const top = 40 + (ev.startMin - start) * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--px-per-min'));
+        const height = (ev.endMin - ev.startMin) * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--px-per-min')) - 4;
+        const gap = 6; const colW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-col-width'));
+        const width = (colW - gap*(lanes-1)) / lanes; const left = lane * (width + gap);
+        const type = types.find(t=>t.id===ev.type) || {color:'#ddd', name:'Unknown'};
+        const el = document.createElement('div'); el.className='event'; el.style.cssText = `top:${top}px;height:${Math.max(22,height)}px;left:${left}px;width:${Math.max(40,width)}px;background:${type.color};color:${textColorFor(type.color)}`;
+        el.dataset.id = ev.id;
+        const sec = ev.section ? ` — ${ev.section}` : '';
+        el.innerHTML = `<div class="ev-title">${ev.label||type.name}${sec}</div><div class="ev-sub">${minutesLabel(ev.startMin)}–${minutesLabel(ev.endMin)}${ev.room?` · ${ev.room}`:''}</div>`;
+        el.addEventListener('click', ()=> openEdit(ev.id));
+        dc.appendChild(el);
+      }
+      table.appendChild(dc);
+    }
+  }
+
+  // ---------- event CRUD ----------
+  function addItemFromForm(){
+    const base = { label: document.getElementById('fLabel').value.trim(), section: document.getElementById('fSection').value.trim(), room: document.getElementById('fRoom').value.trim(), type: document.getElementById('fType').value };
+    const timeRows = collectTimeRows(); let added = 0;
+    for (const tr of timeRows){ for (const d of tr.days){ events.push({ id: uid(), day:d, startMin: tr.startMin, endMin: tr.endMin, ...base }); added++; } }
+    if (added===0){ alert('Select at least one day and provide a valid time range.'); return false; }
+    save(); render(); return true;
+  }
+
+  function openEdit(id){
+    const ev = events.find(e=>e.id===id); if(!ev) return;
+    document.getElementById('editId').value = ev.id;
+    document.getElementById('eLabel').value = ev.label||'';
+    document.getElementById('eSection').value = ev.section||'';
+    document.getElementById('eRoom').value  = ev.room||'';
+    document.getElementById('eType').value  = ev.type;
+    document.getElementById('eDay').value   = String(ev.day);
+    const hS = Math.floor(ev.startMin/60), mS = ev.startMin%60; const amS = hS<12 ? 'AM':'PM'; const hrS = ((hS+11)%12)+1;
+    const hE = Math.floor(ev.endMin/60),   mE = ev.endMin%60; const amE = hE<12 ? 'AM':'PM'; const hrE = ((hE+11)%12)+1;
+    document.getElementById('eSH').value = hrS; document.getElementById('eSM').value = mm(mS);
+    document.querySelector('input[name="eSAMPM"][value="'+amS+'"]').checked = true;
+    document.getElementById('eEH').value = hrE; document.getElementById('eEM').value = mm(mE);
+    document.querySelector('input[name="eEAMPM"][value="'+amE+'"]').checked = true;
+    document.getElementById('editDlg').showModal();
+  }
+
+  function saveEdit(){
+    const id = document.getElementById('editId').value; const ev = events.find(e=>e.id===id); if(!ev) return;
+    ev.label = document.getElementById('eLabel').value.trim();
+    ev.section = document.getElementById('eSection').value.trim();
+    ev.room  = document.getElementById('eRoom').value.trim();
+    ev.type  = document.getElementById('eType').value;
+    ev.day   = parseInt(document.getElementById('eDay').value,10);
+    const sMin = toMinutes12(document.getElementById('eSH').value, document.getElementById('eSM').value, document.querySelector('input[name="eSAMPM"]:checked').value);
+    const eMin = toMinutes12(document.getElementById('eEH').value, document.getElementById('eEM').value, document.querySelector('input[name="eEAMPM"]:checked').value);
+    if (eMin <= sMin) { alert('End must be after start.'); return; }
+    ev.startMin = sMin; ev.endMin = eMin;
+    document.getElementById('editDlg').close(); save(); render();
+  }
+
+  function deleteEdit(){ const id = document.getElementById('editId').value; events = events.filter(e=>e.id!==id); document.getElementById('editDlg').close(); save(); render(); }
+
+  // ---------- export (keeps table background) ----------
+  async function exportPNG(){
+    const node = document.getElementById('exportArea');
+    const canvas = await html2canvas(node,{backgroundColor:null, scale:2, useCORS:true});
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a'); a.href = url; const nm = (document.getElementById('scheduleName').value || 'schedule').replace(/\s+/g,'_'); a.download = nm + '.png'; a.click();
+  }
+
+  // ---------- dialogs/actions ----------
+  function openAdd(){
+    // reset defaults and one time row
+    document.getElementById('fLabel').value=''; document.getElementById('fSection').value=''; document.getElementById('fRoom').value='';
+    const tc = document.getElementById('timesContainer'); tc.innerHTML=''; tc.appendChild(newTimeRow());
+    document.getElementById('addDlg').showModal();
+  }
+
+  // ---------- bootstrap ----------
+  function init(){
+    load();
+    // wire top bar
+    document.getElementById('addItemOpen').addEventListener('click', openAdd);
+    document.getElementById('manageTypesBtn').addEventListener('click', ()=>{ renderTypesDialog(); document.getElementById('typesDlg').showModal(); });
+    document.getElementById('brandBtn').addEventListener('click', ()=>{ document.getElementById('bName').value = brand.name||''; document.getElementById('bSub').value  = brand.sub||''; document.getElementById('bBg').value   = brand.bg||'#0f172a'; document.getElementById('bInk').value  = brand.ink||'#ffffff'; document.getElementById('bSubInk').value = brand.subInk||'#cbd5e1'; document.getElementById('brandDlg').showModal(); });
+    document.getElementById('ttImageBtn').addEventListener('click', ()=>{ document.getElementById('ttImgOpacity').value = ttImg.opacity; document.getElementById('ttImgScale').value = ttImg.scale; document.getElementById('ttImgPos').value = ttImg.pos; document.getElementById('imgDlg').showModal(); });
+    document.getElementById('exportBtn').addEventListener('click', exportPNG);
+    document.getElementById('clearBtn').addEventListener('click', ()=>{ if(confirm('Clear all events?')){ events=[]; save(); render(); }});
+    document.getElementById('scheduleName').addEventListener('input', ()=>{ save(); render(); });
+
+    // add dialog buttons
+    document.getElementById('addTimeRow').addEventListener('click', ()=> document.getElementById('timesContainer').appendChild(newTimeRow()));
+    document.getElementById('addItemBtn').addEventListener('click', (e)=>{ e.preventDefault(); const ok = addItemFromForm(); if (ok) { document.getElementById('addDlg').close(); } });
+    document.getElementById('quickType').addEventListener('click', ()=>{ renderTypesDialog(); document.getElementById('typesDlg').showModal(); });
+
+    // types dialog
+    document.getElementById('addTypeBtn').addEventListener('click', (e)=>{ e.preventDefault(); const name=document.getElementById('newTypeName').value.trim(); const color=document.getElementById('newTypeColor').value; if(!name) return; types.push({id:uid(), name, color}); document.getElementById('newTypeName').value=''; renderTypesDialog(); renderTypesUI(); save(); });
+
+    // brand dialog
+    document.getElementById('saveBrand').addEventListener('click', (e)=>{ e.preventDefault(); brand.name = document.getElementById('bName').value.trim(); brand.sub  = document.getElementById('bSub').value.trim(); brand.bg   = document.getElementById('bBg').value; brand.ink = document.getElementById('bInk').value; brand.subInk = document.getElementById('bSubInk').value; save(); renderBrand(); document.getElementById('brandDlg').close(); });
+    document.getElementById('clearLogo').addEventListener('click', (e)=>{ e.preventDefault(); brand.logo=''; save(); renderBrand(); });
+    document.getElementById('bLogo').addEventListener('change', async (e)=>{ const f=e.target.files[0]; if(!f) return; brand.logo = await readAsDataURL(f); save(); renderBrand(); });
+
+    // timetable image dialog
+    document.getElementById('saveTTImg').addEventListener('click', (e)=>{ e.preventDefault(); ttImg.opacity = parseFloat(document.getElementById('ttImgOpacity').value); ttImg.scale   = parseInt(document.getElementById('ttImgScale').value,10); ttImg.pos     = document.getElementById('ttImgPos').value; save(); render(); document.getElementById('imgDlg').close(); });
+    document.getElementById('clearTTImg').addEventListener('click', (e)=>{ e.preventDefault(); ttImg.src=''; save(); render(); });
+    document.getElementById('ttImgFile').addEventListener('change', async (e)=>{ const f=e.target.files[0]; if(!f) return; ttImg.src = await readAsDataURL(f); save(); render(); });
+
+    renderTypesUI();
+    renderBrand();
+    render();
+  }
+
+  window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
