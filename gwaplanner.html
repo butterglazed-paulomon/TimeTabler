@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🎯 Target GWA / Grade Planner</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #11162b;
+      --muted: #a9b0c6;
+      --text: #f3f5ff;
+      --accent: #5b8cff;
+      --ok: #39d98a;
+      --warn: #ffcc66;
+      --bad: #ff6b6b;
+      --line: #222845;
+      --chip: #1a2242;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; }
+    .wrap { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)) border-box, var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    p.lead { margin: 0 0 16px; color: var(--muted); }
+    .row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+    @media (max-width: 900px) { .row { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+
+    label { display:block; font-weight: 600; margin-bottom: 6px; color: #cfd6ff; }
+    input, select, button {
+      width: 100%; border-radius: 10px; border: 1px solid var(--line);
+      background: #0e1430; color: var(--text); padding: 10px 12px; outline: none;
+    }
+    input[type="number"] { text-align: right; }
+    input::placeholder { color: #8290b3; }
+    .btn { cursor: pointer; }
+    .btn.primary { background: var(--accent); border-color: transparent; color: white; font-weight: 700; }
+    .btn.ghost { background: #0e1430; }
+    .btn.icon { width: auto; padding: 8px 10px; display: inline-flex; align-items: center; gap: 6px; }
+    .chips { display:flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .chip { background: var(--chip); border: 1px solid var(--line); padding: 6px 10px; border-radius: 999px; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px; }
+    th { text-align: left; color: #cfd6ff; }
+    td:last-child, th:last-child { text-align: center; }
+    .mini { font-size: 12px; color: var(--muted); }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    .right { text-align: right; }
+    .flex { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .footer { color: var(--muted); font-size: 12px; margin-top: 10px; }
+    .note { background: #0e1430; border: 1px dashed var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>🎯 Target GWA / Grade Planner</h1>
+      <p class="lead">Build a plan to hit your target grade/GWA. Enter your courses, progress so far, and current averages—this tool tells you what you need on the <b>remaining work</b> to reach a target.</p>
+
+      <div class="row">
+        <div>
+          <label>Student ID</label>
+          <input id="studentId" type="text" placeholder="e.g., 2025-12345" />
+        </div>
+        <div>
+          <label>Term / Semester</label>
+          <input id="term" type="text" placeholder="e.g., AY 2025-2026 Term 1" />
+        </div>
+        <div>
+          <label>Target (choose scale first)</label>
+          <input id="target" type="number" step="0.01" value="90" />
+        </div>
+        <div>
+          <label>Scale</label>
+          <select id="scale" onchange="onScaleChange()">
+            <option value="pct" selected>0–100 (percentage)</option>
+            <option value="gwa">1.00–5.00 (PH GWA)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="chips">
+        <span class="chip">Total Units: <b id="totalUnits">0</b></span>
+        <span class="chip">Completed Weighted: <b id="completedWeighted">0.00</b></span>
+        <span class="chip">Remaining Weight: <b id="remainingWeight">0.00</b></span>
+        <span class="chip">Current Overall: <b id="currentOverall">—</b></span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:30%">Course</th>
+            <th style="width:12%">Units</th>
+            <th style="width:18%">Progress (%)</th>
+            <th style="width:18%">Current Avg</th>
+            <th style="width:18%">Needed on Remaining</th>
+            <th style="width:4%"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="flex" style="margin-top:10px;">
+        <button class="btn ghost icon" onclick="addRow()">
+          ➕ Add course
+        </button>
+        <button class="btn ghost icon" onclick="addSample()">✨ Add sample data</button>
+        <button class="btn ghost icon" onclick="resetAll()">♻️ Reset</button>
+        <button class="btn primary icon" onclick="exportJSON()">💾 Export Plan</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+        <button class="btn ghost icon" onclick="document.getElementById('importFile').click()">📥 Import</button>
+      </div>
+
+      <div class="note">
+        <b>About scales:</b> This tool works internally in percentages (0–100). If you switch to GWA, we use a simple linear mapping to estimate percent: 1.00 → 100, 3.00 → 75, 5.00 → 50.
+        Always follow your school’s official conversion when available.
+      </div>
+
+      <h3 style="margin:18px 0 6px;">Result</h3>
+      <div id="result" class="mini">Start adding rows to see calculations.</div>
+
+      <div class="footer">
+        Pro-tip: “Progress” is the fraction of the course that already has grades (e.g., 60 means ~60% of the grading is done). The “Needed on Remaining” shows the average you must score on the rest to hit your selected target.
+      </div>
+    </div>
+  </div>
+
+<script>
+// --- Conversion helpers (very simple approximations). Adjust to your school's scale if needed.
+function gwaToPct(gwa) {
+  // 1.00 (best) -> 100; 3.00 -> 75; 5.00 (fail) -> 50 (clamped)
+  const clamped = Math.max(1.0, Math.min(5.0, gwa));
+  // Map 1..5 to 100..50 linearly
+  return 100 - ((clamped - 1) * (50 / 4));
+}
+function pctToGwa(pct) {
+  // Inverse mapping of the above
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (1 + (100 - clamped) * (4 / 50));
+}
+
+// --- State
+const tbody = document.getElementById("tbody");
+const els = {
+  studentId: document.getElementById("studentId"),
+  term: document.getElementById("term"),
+  target: document.getElementById("target"),
+  scale: document.getElementById("scale"),
+  totalUnits: document.getElementById("totalUnits"),
+  completedWeighted: document.getElementById("completedWeighted"),
+  remainingWeight: document.getElementById("remainingWeight"),
+  currentOverall: document.getElementById("currentOverall"),
+  result: document.getElementById("result"),
+  importFile: document.getElementById("importFile"),
+};
+
+function onScaleChange() {
+  // When scale changes, reinterpret target field accordingly (visual only).
+  const v = parseFloat(els.target.value || "0");
+  if (els.scale.value === "gwa") {
+    // If user typed a likely percent (e.g., > 5), convert to gwa for display.
+    if (v > 5) els.target.value = pctToGwa(v).toFixed(2);
+  } else {
+    // If user typed a likely gwa (<= 5), convert to percent for display.
+    if (v <= 5) els.target.value = gwaToPct(v).toFixed(2);
+  }
+  recalc();
+}
+
+function addRow(row = { name:"", units:3, progress:50, current:85 }) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input type="text" placeholder="e.g., Calculus 1" value="${row.name || ""}" /></td>
+    <td><input type="number" step="0.5" min="0" value="${row.units ?? 3}" /></td>
+    <td><input type="number" step="1" min="0" max="100" value="${row.progress ?? 50}" /></td>
+    <td><input type="number" step="0.01" min="0" max="100" value="${row.current ?? 85}" /></td>
+    <td class="right"><span class="need">—</span></td>
+    <td><button class="btn ghost" title="Remove">🗑️</button></td>
+  `;
+  const [nameI, unitsI, progI, currI] = tr.querySelectorAll("input");
+  const delBtn = tr.querySelector("button");
+  [nameI, unitsI, progI, currI].forEach(i => i.addEventListener("input", recalc));
+  delBtn.addEventListener("click", () => { tr.remove(); recalc(); });
+  tbody.appendChild(tr);
+  recalc();
+}
+
+function addSample() {
+  const samples = [
+    {name:"Calculus 1", units:4, progress:60, current:88},
+    {name:"Physics 1", units:3, progress:40, current:82},
+    {name:"Intro to Programming", units:3, progress:70, current:91},
+    {name:"GE: Communication", units:3, progress:50, current:87},
+  ];
+  samples.forEach(addRow);
+}
+
+function resetAll() {
+  tbody.innerHTML = "";
+  els.studentId.value = "";
+  els.term.value = "";
+  els.scale.value = "pct";
+  els.target.value = "90";
+  recalc();
+}
+
+function getRows() {
+  return Array.from(tbody.querySelectorAll("tr")).map(tr => {
+    const [nameI, unitsI, progI, currI] = tr.querySelectorAll("input");
+    return {
+      el: tr,
+      name: nameI.value.trim(),
+      units: Number(unitsI.value || 0),
+      progressPct: clamp(Number(progI.value || 0), 0, 100),
+      currentPct: clamp(Number(currI.value || 0), 0, 100),
+    };
+  });
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function currentTargetPct() {
+  const raw = Number(els.target.value || 0);
+  return (els.scale.value === "gwa")
+    ? gwaToPct(raw)
+    : raw;
+}
+
+function fmtPct(x) {
+  if (isNaN(x)) return "—";
+  if (!isFinite(x)) return "∞";
+  return x.toFixed(2) + "%";
+}
+
+function recalc() {
+  const rows = getRows();
+  const targetPct = currentTargetPct();
+  let totalUnits = 0;
+  let completedWeighted = 0; // sum(units * progress * current)
+  let remainingWeight = 0;   // sum(units * (1-progress))
+
+  rows.forEach(r => {
+    const progress = r.progressPct / 100; // 0..1
+    const remaining = 1 - progress;
+    totalUnits += r.units;
+    completedWeighted += r.units * progress * (r.currentPct / 100);
+    remainingWeight += r.units * remaining;
+  });
+
+  // Overall current average (considering only completed portions)
+  const completedUnitsWeight = rows.reduce((s, r) => s + r.units * (r.progressPct / 100), 0);
+  const currentOverall = completedUnitsWeight > 0
+    ? (completedWeighted / completedUnitsWeight) * 100
+    : NaN;
+
+  // Needed percent on remaining work overall to hit target
+  // Equation: (completedWeighted + neededRemaining * remainingWeight) / totalUnits = targetPct/100
+  // => neededRemaining = ((targetPct/100) * totalUnits - completedWeighted) / remainingWeight
+  let neededRemainingOverall = NaN;
+  if (remainingWeight > 0) {
+    neededRemainingOverall = (((targetPct/100) * totalUnits) - completedWeighted) / remainingWeight;
+  }
+
+  // Per-row "needed" on remaining work to ensure course-level target equals the same target percentage
+  rows.forEach(r => {
+    const progress = r.progressPct / 100;
+    const remaining = 1 - progress;
+    let need = NaN;
+    if (remaining > 0) {
+      // (progress * current + remaining * need) = target
+      need = ((targetPct/100) - (progress * (r.currentPct/100))) / remaining;
+    }
+    const needCell = r.el.querySelector(".need");
+    let cls = "";
+    let text;
+    if (isNaN(need)) {
+      text = "—";
+    } else {
+      const pct = need * 100;
+      text = fmtPct(pct);
+      if (pct <= 100 && pct >= 0) cls = pct <= 60 ? "ok" : (pct <= 85 ? "warn" : "bad");
+      else cls = "bad";
+    }
+    needCell.className = "need " + cls;
+    needCell.textContent = text;
+  });
+
+  // UI updates
+  els.totalUnits.textContent = totalUnits.toFixed(2).replace(/\.00$/, "");
+  els.completedWeighted.textContent = (completedWeighted * 100).toFixed(2);
+  els.remainingWeight.textContent = remainingWeight.toFixed(2);
+  els.currentOverall.textContent = isNaN(currentOverall) ? "—" :
+    (els.scale.value === "g
