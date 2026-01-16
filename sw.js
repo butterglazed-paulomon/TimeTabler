@@ -1,4 +1,4 @@
-const CACHE_NAME = 'paulomon-v1';
+const CACHE_NAME = 'paulomon-v2';
 const ASSETS = [
   './',
   './index.html',
